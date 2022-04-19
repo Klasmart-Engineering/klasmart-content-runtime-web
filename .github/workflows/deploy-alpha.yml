@@ -1,0 +1,53 @@
+name: Deploy to Alpha
+
+concurrency: 
+    group: AlphaDeployment
+    cancel-in-progress: true
+
+on:
+    release:
+        types: [published]
+    workflow_dispatch:
+
+jobs:
+    install:
+        uses: KL-Engineering/github-action-workflows/.github/workflows/npm-ci.yml@v3.1.0
+        secrets:
+            NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+
+    test-unit:
+        needs: [install]
+        uses: KL-Engineering/github-action-workflows/.github/workflows/npm-test-jest.yml@v3.1.0
+
+    lint:
+        needs: [install]
+        uses: KL-Engineering/github-action-workflows/.github/workflows/npm-lint.yml@v3.1.0
+
+    build:
+        needs: [install]
+        uses: KL-Engineering/github-action-workflows/.github/workflows/npm-build-upload-fe.yml@v3.1.0
+        with:
+            environment: alpha
+            region: internal
+            upload: true
+
+    confirm-deployment:
+        needs: [test-unit, build]
+        runs-on: ubuntu-latest
+        environment: alpha-dev
+        steps:
+            - name: Debug message
+              run: echo Deployment confirmed
+
+    deploy:
+        needs: [confirm-deployment]
+        uses: KL-Engineering/github-action-workflows/.github/workflows/deploy-aws-s3-cloudfront.yml@v3.1.0
+        with:
+            environment: alpha
+            region: internal
+            aws-region: ap-northeast-2
+            aws-s3-bucket: kidsloop-alpha-live-crack-drake
+            aws-cloudfront-distribution-id: E2694SIA1FLALO
+        secrets:
+            AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_ALPHA_DEV }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_ALPHA_DEV }}
